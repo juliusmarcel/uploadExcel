@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Excel ke SQL Server</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.3/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <h2 class="text-center">Upload File Excel ke SQL Server</h2>
+        <div class="card p-4">
+            <div class="mb-3">
+                <label for="fileInput" class="form-label">Pilih File Excel</label>
+                <input type="file" class="form-control" id="fileInput" accept=".xlsx, .xls">
+            </div>
+
+            <h5>Table:</h5>
+            <select id="sheetSelector" class="form-select mb-3" onchange="changeSheet()"></select>
+
+            <h5>Preview Data:</h5>
+            <div class="table-responsive">
+                <table id="previewTable" class="table table-bordered">
+                    <thead><tr></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <button class="btn btn-primary mt-3" onclick="uploadFile()">Upload ke Database</button>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile;
+        let jsonData = {};
+        let currentSheet = "";
+
+        document.getElementById('fileInput').addEventListener("change", function(event) {
+            let file = event.target.files[0];
+            if (!file) return;
+            selectedFile = file;
+
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                let data = new Uint8Array(e.target.result);
+                let workbook = XLSX.read(data, { type: 'array' });
+
+                // Simpan data semua sheet
+                jsonData = {};
+                let sheetSelector = document.getElementById("sheetSelector");
+                sheetSelector.innerHTML = "";
+
+                workbook.SheetNames.forEach(sheet => {
+                    jsonData[sheet] = XLSX.utils.sheet_to_json(workbook.Sheets[sheet], { header: 1 });
+
+                    let option = document.createElement("option");
+                    option.value = sheet;
+                    option.textContent = sheet;
+                    sheetSelector.appendChild(option);
+                });
+
+                currentSheet = workbook.SheetNames[0];
+                displayPreview(currentSheet);
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function changeSheet() {
+            currentSheet = document.getElementById("sheetSelector").value;
+            displayPreview(currentSheet);
+        }
+
+        function displayPreview(sheet) {
+            let data = jsonData[sheet];
+            let tableHead = document.querySelector("#previewTable thead tr");
+            let tableBody = document.querySelector("#previewTable tbody");
+
+            tableHead.innerHTML = "";
+            tableBody.innerHTML = "";
+
+            if (data.length > 0) {
+                // Create table header from the first row of data
+                data[0].forEach(col => {
+                    let th = document.createElement("th");
+                    th.textContent = col;
+                    tableHead.appendChild(th);
+                });
+
+                // Create table rows from the data
+                data.slice(1).forEach(row => {
+                    let tr = document.createElement("tr");
+                    row.forEach(cell => {
+                        let td = document.createElement("td");
+                        td.textContent = cell;
+                        tr.appendChild(td);
+                    });
+                    tableBody.appendChild(tr);
+                });
+            }
+        }
+
+        function uploadFile() {
+            if (!selectedFile) {
+                alert("Silakan pilih file terlebih dahulu!");
+                return;
+            }
+
+            let formData = new FormData();
+            formData.append("file", selectedFile);
+
+            fetch('/upload', { 
+                method: "POST", 
+                body: formData 
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                if (data.details) {
+                    console.log("Detail Upload:", data.details);
+                }
+            })
+            .catch(error => {
+                console.error("Error:", error);
+                alert("Terjadi error saat mengupload file");
+            });
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
